@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from urllib.parse import urlencode
 
 from mitmproxy import connection, http
@@ -116,6 +117,12 @@ class XiaomiDecodedTabTest(unittest.TestCase):
         self.assertEqual(app._load_ssecurity(), "")
         self.assertTrue(app.SSECURITY_PATH.exists())
         self.assertEqual(app.SSECURITY_PATH.stat().st_mode & 0o777, 0o600)
+
+    def test_uses_desktop_data_directory_when_configured(self) -> None:
+        data_dir = Path(self.temp_dir.name) / "desktop-data"
+        with patch.dict("os.environ", {app.DATA_DIR_ENV: str(data_dir)}):
+            self.assertEqual(app._ssecurity_path(), data_dir / "ssecurity.txt")
+        self.assertTrue(data_dir.is_dir())
 
     def test_captures_ssecurity_from_login_response(self) -> None:
         flow = _plain_flow(

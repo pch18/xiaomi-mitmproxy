@@ -19,7 +19,7 @@ mitmweb 中额外增加两个详情选项卡：
 - 保留 mitmweb 原有的 `Request` 和 `Response` 选项卡。
 - 增加支持折叠、语法高亮和局部复制的 JSON 文本阅读器。
 - 解密失败时仍然显示小米选项卡，并展示原始内容。
-- Flow List 默认使用 `mi.com` 作为搜索条件。
+- Flow List 默认只展示匹配 `api.io.mi.com` 或 `api.mijia.tech` 的流量。
 - 在顶部选项卡后增加红色 `Clear All` 按钮，点击后直接清空请求，无需二次确认。
 - 自动捕获并持久化登录响应中的 `ssecurity`。
 
@@ -49,6 +49,38 @@ chmod +x start.sh
 mitmweb 文件。首次执行 `./start.sh` 时，会自动创建 `.venv` 并安装运行依赖。
 后续再次执行时会直接启动。
 
+## 构建 macOS App
+
+在 macOS 上可以构建独立运行的桌面应用：
+
+```bash
+chmod +x build_mac_app.sh
+./build_mac_app.sh
+```
+
+构建产物位于：
+
+```text
+dist/Xiaomi Mitmproxy.app
+```
+
+双击应用后需要先输入手机代理端口，默认值为 `8080`。如果输入的端口已经被
+占用，应用会提示输入其他端口。代理启动后会打开抓包窗口，窗口标题会显示
+手机需要填写的局域网代理地址和端口。关闭应用窗口后，代理服务会一并退出。
+
+Web 管理界面不再固定使用 `8081`，桌面版每次启动时会自动选择一个空闲的
+随机本地端口。
+
+当前构建脚本生成 Apple Silicon `arm64` 版本。应用使用本地临时签名，尚未
+接入 Apple Developer ID 公证流程；分发到其他电脑后，首次打开可能需要在
+Finder 中右键选择“打开”。
+
+桌面版会将 `ssecurity.txt` 和运行日志保存到：
+
+```text
+~/Library/Application Support/Xiaomi Mitmproxy/
+```
+
 ## 配置 ssecurity
 
 addon 会从当前项目目录读取小米云服务会话密钥：
@@ -60,6 +92,9 @@ ssecurity.txt
 `ssecurity` 属于会话敏感信息，因此该文件已经被 Git 忽略。如果文件不存在，
 addon 会在启动时自动创建空的 `ssecurity.txt`，并将权限限制为仅当前用户可
 读写。
+
+使用 macOS App 时，文件位于 `~/Library/Application Support/Xiaomi Mitmproxy/`
+而不是项目目录。
 
 addon 会自动监听以下登录接口：
 

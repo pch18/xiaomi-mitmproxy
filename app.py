@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -14,10 +15,21 @@ from miutils import decrypt
 API_DOMAINS = ("api.io.mi.com", "api.mijia.tech")
 LOGIN_HOST = "account.xiaomi.com"
 LOGIN_PATH = "/pass/serviceLoginAuth2"
-SSECURITY_PATH = Path(__file__).resolve().parent / "ssecurity.txt"
+DATA_DIR_ENV = "XIAOMI_MITMPROXY_DATA_DIR"
 METADATA_KEY = "xiaomi_decoded"
 COMMENT_HEADER = "[xiaomi decoded]"
 logger = logging.getLogger(__name__)
+
+
+def _ssecurity_path() -> Path:
+    if data_dir := os.environ.get(DATA_DIR_ENV):
+        directory = Path(data_dir).expanduser()
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory / "ssecurity.txt"
+    return Path(__file__).resolve().parent / "ssecurity.txt"
+
+
+SSECURITY_PATH = _ssecurity_path()
 
 
 def _load_ssecurity() -> str:

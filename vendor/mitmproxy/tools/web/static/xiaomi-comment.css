@@ -1,0 +1,81 @@
+section.xiaomi-decoded {
+    height: 100%;
+    overflow: auto;
+    padding: 1em;
+}
+
+section.xiaomi-decoded pre {
+    background: transparent;
+    border: 0;
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    font-size: 13px;
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.xiaomi-json-node {
+    margin-left: 1.25em;
+}
+
+.xiaomi-json-node > summary {
+    cursor: pointer;
+    line-height: 1.7;
+    list-style-position: outside;
+    user-select: text;
+}
+
+.xiaomi-json-children {
+    border-left: 1px solid #ddd;
+    margin-left: .15em;
+    padding-left: .35em;
+}
+
+.xiaomi-json-leaf {
+    line-height: 1.7;
+    margin-left: 1.25em;
+    user-select: text;
+}
+
+.xiaomi-json-close {
+    line-height: 1.7;
+    user-select: text;
+}
+
+.xiaomi-json-key {
+    color: #8250df;
+}
+
+.xiaomi-json-string {
+    color: #116329;
+}
+
+.xiaomi-json-value,
+.xiaomi-json-punctuation {
+    color: #0550ae;
+}
+
+.xiaomi-json-node[open] > summary .xiaomi-json-folded {
+    display: none;
+}
+
+.nav-tabs > .xiaomi-clear-all-nav {
+    background-color: #d9534f;
+    border: 1px solid #d43f3a;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    float: right;
+    margin: 0 6px 2px;
+    padding: 2px 10px;
+    position: relative;
+    top: -2px;
+}
+
+.nav-tabs > .xiaomi-clear-all-nav:hover,
+.nav-tabs > .xiaomi-clear-all-nav:focus {
+    background-color: #c9302c;
+    border-color: #ac2925;
+    color: #fff;
+}
+

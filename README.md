@@ -1,6 +1,6 @@
 # xiaomi mitmproxy
 
-用于查看小米云服务加密 API 流量的 mitmproxy addon 和 mitmweb 界面补丁。
+用于查看小米云服务加密 API 流量的定制版 mitmproxy。
 
 它不会修改拦截到的原始请求和响应内容。对于匹配的小米 API 请求，会在
 mitmweb 中额外增加两个详情选项卡：
@@ -25,11 +25,11 @@ mitmweb 中额外增加两个详情选项卡：
 
 ## 环境要求
 
-- Python 3.11 或更高版本
+- Python 3.12 或更高版本
 - 手机和运行 mitmweb 的电脑位于同一个局域网
 - 一个可用的小米云服务登录会话，或已有的小米云服务 `ssecurity`
 
-界面补丁固定适配以下版本：
+项目内置了基于以下版本修改的 mitmproxy 源码：
 
 ```text
 mitmproxy==12.2.3
@@ -38,17 +38,16 @@ mitmproxy==12.2.3
 ## 安装
 
 ```bash
-git clone <你的 GitHub 仓库地址>
+git clone https://github.com/pch18/xiaomi-mitmproxy
 cd xiaomi-mitmproxy
 
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
-python3 patch_mitmweb_comment_preview.py
+chmod +x start.sh
+./start.sh
 ```
 
-补丁脚本会修改本地 `.venv` 中安装的 mitmweb 文件。重新创建虚拟环境或重新
-安装 mitmproxy 后，需要再次运行补丁脚本。
+项目已经在 `vendor/mitmproxy` 中内置定制版源码，不需要额外修改本地安装的
+mitmweb 文件。首次执行 `./start.sh` 时，会自动创建 `.venv` 并安装运行依赖。
+后续再次执行时会直接启动。
 
 ## 配置 ssecurity
 
@@ -86,8 +85,7 @@ chmod 600 ssecurity.txt
 ## 启动 mitmweb
 
 ```bash
-source .venv/bin/activate
-mitmweb -s app.py --listen-host 0.0.0.0 --listen-port 8080
+./start.sh
 ```
 
 在电脑上打开 Web 管理界面：
@@ -96,7 +94,7 @@ mitmweb -s app.py --listen-host 0.0.0.0 --listen-port 8080
 http://127.0.0.1:8081
 ```
 
-更新界面补丁后，请强制刷新浏览器：
+更新项目代码后，如果页面仍然显示旧界面，请强制刷新浏览器：
 
 ```text
 macOS:         Cmd + Shift + R
@@ -174,17 +172,25 @@ Raw body
 ## 测试
 
 ```bash
-source .venv/bin/activate
-python3 -m unittest -v
+PYTHONPATH=vendor .venv/bin/python -m unittest -v
 ```
 
 ## 已知限制
 
-- mitmweb 补丁仅适配 `mitmproxy==12.2.3`。使用其他版本时，可能需要调整
-  `patch_mitmweb_comment_preview.py`。
+- 内置源码基于 `mitmproxy==12.2.3`。升级 mitmproxy 时，需要重新合并本项目
+  在 mitmweb 中的定制内容。
 - addon 只会尝试解密 `api.io.mi.com` 及其子域名的 RC4 流量。
 - 如果应用使用了证书锁定、自定义 TLS 实现，或绕过系统代理，可能无法抓取
   流量。
+
+## 开源许可证
+
+项目内置的 mitmproxy 源码基于 `mitmproxy==12.2.3`，遵循上游 MIT License。
+许可证文本位于：
+
+```text
+vendor/mitmproxy/LICENSE
+```
 
 ## 使用声明
 

@@ -11,7 +11,7 @@ from mitmproxy import http
 
 from miutils import decrypt
 
-API_DOMAIN = "api.io.mi.com"
+API_DOMAINS = ("api.io.mi.com", "api.mijia.tech")
 LOGIN_HOST = "account.xiaomi.com"
 LOGIN_PATH = "/pass/serviceLoginAuth2"
 SSECURITY_PATH = Path(__file__).resolve().parent / "ssecurity.txt"
@@ -35,7 +35,7 @@ SSECURITY = _load_ssecurity()
 
 def _matches_api_domain(host: str) -> bool:
     host = host.rstrip(".").lower()
-    return host == API_DOMAIN or host.endswith(f".{API_DOMAIN}")
+    return any(host == domain or host.endswith(f".{domain}") for domain in API_DOMAINS)
 
 
 def _json_value(text: str) -> object:

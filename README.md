@@ -13,7 +13,7 @@ mitmweb 中额外增加两个详情选项卡：
 
 ## 功能
 
-- 仅处理 `api.io.mi.com` 及其子域名。
+- 仅处理 `api.io.mi.com`、`api.mijia.tech` 及其子域名。
 - 从 `application/x-www-form-urlencoded` 请求体中提取 `_nonce` 和 `data`。
 - 解密小米 RC4 加密的请求和响应内容。
 - 保留 mitmweb 原有的 `Request` 和 `Response` 选项卡。
@@ -179,7 +179,7 @@ PYTHONPATH=vendor .venv/bin/python -m unittest -v
 
 - 内置源码基于 `mitmproxy==12.2.3`。升级 mitmproxy 时，需要重新合并本项目
   在 mitmweb 中的定制内容。
-- addon 只会尝试解密 `api.io.mi.com` 及其子域名的 RC4 流量。
+- addon 只会尝试解密 `api.io.mi.com`、`api.mijia.tech` 及其子域名的 RC4 流量。
 - 如果应用使用了证书锁定、自定义 TLS 实现，或绕过系统代理，可能无法抓取
   流量。
 

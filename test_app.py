@@ -60,6 +60,17 @@ class XiaomiDecodedTabTest(unittest.TestCase):
             },
         )
 
+    def test_decodes_mijia_domain(self) -> None:
+        flow = _flow(host="api.mijia.tech", request_plaintext="hello")
+        app.request(flow)
+        self.assertEqual(
+            flow.metadata[app.METADATA_KEY],
+            {
+                "request": {"ok": True, "data": "hello"},
+                "response": {"ok": False, "error": "Waiting for response.", "raw": ""},
+            },
+        )
+
     def test_ignores_unrelated_domain(self) -> None:
         flow = _flow(host="example.com", request_plaintext="hello", response_plaintext="world")
         app.request(flow)

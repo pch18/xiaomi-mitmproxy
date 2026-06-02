@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
+import logging
+from pathlib import Path
 from urllib.parse import parse_qs
 
 from mitmproxy import http
@@ -11,9 +12,25 @@ from mitmproxy import http
 from miutils import decrypt
 
 API_DOMAIN = "api.io.mi.com"
-SSECURITY = os.environ.get("XIAOMI_SSECURITY", "")
+LOGIN_HOST = "account.xiaomi.com"
+LOGIN_PATH = "/pass/serviceLoginAuth2"
+SSECURITY_PATH = Path(__file__).resolve().parent / "ssecurity.txt"
 METADATA_KEY = "xiaomi_decoded"
 COMMENT_HEADER = "[xiaomi decoded]"
+logger = logging.getLogger(__name__)
+
+
+def _load_ssecurity() -> str:
+    try:
+        ssecurity = SSECURITY_PATH.read_text().strip()
+    except FileNotFoundError:
+        SSECURITY_PATH.touch(mode=0o600)
+        ssecurity = ""
+    SSECURITY_PATH.chmod(0o600)
+    return ssecurity
+
+
+SSECURITY = _load_ssecurity()
 
 
 def _matches_api_domain(host: str) -> bool:
@@ -55,7 +72,7 @@ def _request_result(flow: http.HTTPFlow) -> tuple[str | None, dict[str, object]]
     raw = flow.request.get_text(strict=False)
     try:
         if not SSECURITY:
-            raise ValueError("XIAOMI_SSECURITY environment variable is not configured")
+            raise ValueError("ssecurity.txt is empty; log in to Xiaomi or add ssecurity manually")
         nonce, encrypted_request = _request_fields(flow)
         return nonce, _result(raw=raw, value=_json_value(decrypt(SSECURITY, nonce, encrypted_request)))
     except Exception as exc:
@@ -90,6 +107,47 @@ def _update_decoded(flow: http.HTTPFlow, include_response: bool) -> None:
     flow.comment = _replace_generated_comment(flow.comment, COMMENT_HEADER)
 
 
+def _is_login_response(flow: http.HTTPFlow) -> bool:
+    return flow.request.host.lower() == LOGIN_HOST and flow.request.path.split("?", 1)[0] == LOGIN_PATH
+
+
+def _login_response_json(text: str) -> object:
+    start = text.find("{")
+    if start < 0:
+        raise ValueError("login response does not contain JSON")
+    return json.loads(text[start:])
+
+
+def _find_ssecurity(value: object) -> str | None:
+    if isinstance(value, dict):
+        candidate = value.get("ssecurity")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+        for nested in value.values():
+            if found := _find_ssecurity(nested):
+                return found
+    elif isinstance(value, list):
+        for nested in value:
+            if found := _find_ssecurity(nested):
+                return found
+    return None
+
+
+def _capture_ssecurity(flow: http.HTTPFlow) -> None:
+    global SSECURITY
+
+    assert flow.response is not None
+    payload = _login_response_json(flow.response.get_text(strict=True))
+    ssecurity = _find_ssecurity(payload)
+    if not ssecurity:
+        raise ValueError("login response does not contain ssecurity")
+
+    SSECURITY_PATH.write_text(f"{ssecurity}\n")
+    SSECURITY_PATH.chmod(0o600)
+    SSECURITY = ssecurity
+    logger.info("Updated Xiaomi ssecurity in %s", SSECURITY_PATH)
+
+
 def request(flow: http.HTTPFlow) -> None:
     """Decode the request while keeping the original intercepted body intact."""
     if not _matches_api_domain(flow.request.host):
@@ -100,7 +158,16 @@ def request(flow: http.HTTPFlow) -> None:
 
 def response(flow: http.HTTPFlow) -> None:
     """Decode the response and expose both plaintext bodies to mitmweb."""
-    if flow.response is None or not _matches_api_domain(flow.request.host):
+    if flow.response is None:
+        return
+
+    if _is_login_response(flow):
+        try:
+            _capture_ssecurity(flow)
+        except Exception as exc:
+            logger.warning("Could not update Xiaomi ssecurity: %s", exc)
+
+    if not _matches_api_domain(flow.request.host):
         return
 
     _update_decoded(flow, include_response=True)

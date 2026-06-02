@@ -7,6 +7,8 @@ from pathlib import Path
 import mitmproxy
 
 STYLE_LINK = '      <link rel="stylesheet" href="./static/xiaomi-comment.css">\n'
+ORIGINAL_TITLE = "<title>mitmproxy</title>"
+XIAOMI_TITLE = "<title>Xiaomi Mitmproxy</title>"
 STYLE = """\
 section.xiaomi-decoded {
     height: 100%;
@@ -75,8 +77,11 @@ section.xiaomi-decoded pre {
     border-radius: 4px;
     color: #fff;
     cursor: pointer;
-    margin: 1px 6px 1px 8px;
+    float: right;
+    margin: 0 6px 2px;
     padding: 2px 10px;
+    position: relative;
+    top: -2px;
 }
 
 .nav-tabs > .xiaomi-clear-all-nav:hover,
@@ -212,7 +217,12 @@ def main() -> None:
 
     html = index_path.read_text()
     if STYLE_LINK not in html:
-        index_path.write_text(html.replace("    </head>\n", f"{STYLE_LINK}    </head>\n"))
+        html = html.replace("    </head>\n", f"{STYLE_LINK}    </head>\n")
+    if ORIGINAL_TITLE in html:
+        html = html.replace(ORIGINAL_TITLE, XIAOMI_TITLE, 1)
+    elif XIAOMI_TITLE not in html:
+        raise RuntimeError(f"title patch target not found in {index_path}")
+    index_path.write_text(html)
     style_path.write_text(STYLE)
     _patch_backend(web_dir / "app.py")
     _patch_frontend(next((web_dir / "static").glob("index-*.js")))

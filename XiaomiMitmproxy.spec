@@ -32,7 +32,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch="arm64",
+    target_arch="universal2",
     codesign_identity=None,
     entitlements_file=None,
 )
@@ -50,6 +50,6 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Xiaomi Mitmproxy.app",
-    icon=None,
+    icon="assets/app_icon.icns",
     bundle_identifier="com.xiaomi-mitmproxy.app",
 )

@@ -16,11 +16,12 @@ class MacAppPortTest(unittest.TestCase):
         sock.bind.assert_called_once_with((mac_app.WEB_HOST, 0))
 
     def test_detects_occupied_port(self) -> None:
-        sock = MagicMock()
-        sock.__enter__.return_value = sock
-        sock.bind.side_effect = OSError("address already in use")
-        with patch("socket.socket", return_value=sock):
+        with patch("socket.create_connection"):
             self.assertFalse(mac_app._port_is_available(mac_app.WEB_HOST, 8080))
+
+    def test_detects_available_port_by_failed_connection(self) -> None:
+        with patch("socket.create_connection", side_effect=OSError("connection refused")):
+            self.assertTrue(mac_app._port_is_available("0.0.0.0", 8080))
 
     def test_reads_lan_address_from_default_route_interface(self) -> None:
         route = MagicMock(stdout="   interface: en0\n")
@@ -58,7 +59,7 @@ class MacAppPortTest(unittest.TestCase):
         _, kwargs = webview.create_window.call_args
         self.assertIn('value="8080"', kwargs["html"])
         self.assertIsInstance(kwargs["js_api"], mac_app.PortApi)
-        self.assertEqual(closing.callbacks, [kwargs["js_api"].stop])
+        self.assertEqual(closing.callbacks, [kwargs["js_api"].close])
         webview.start.assert_called_once_with()
 
     def test_port_api_resizes_window_before_loading_main_page(self) -> None:
@@ -119,6 +120,83 @@ class MacAppPortTest(unittest.TestCase):
         self.assertEqual(result, {"ok": False, "error": "应用窗口已关闭。"})
         self.assertIsNone(api.runtime)
         stop_server.assert_called_once_with(runtime)
+
+    def test_port_api_close_stops_server_and_exits_process(self) -> None:
+        runtime = mac_app.ServerRuntime(proxy_port=8080, web_port=49152)
+        api = mac_app.PortApi()
+        api.runtime = runtime
+
+        with (
+            patch.object(mac_app, "_request_server_stop") as request_stop,
+            patch.object(mac_app.os, "_exit") as exit_process,
+        ):
+            api.close()
+
+        self.assertTrue(api.closed.is_set())
+        self.assertIsNone(api.runtime)
+        request_stop.assert_called_once_with(runtime)
+        exit_process.assert_called_once_with(0)
+
+    def test_port_api_copy_text_uses_native_clipboard(self) -> None:
+        api = mac_app.PortApi()
+        pasteboard = SimpleNamespace(
+            clearContents=MagicMock(),
+            setString_forType_=MagicMock(return_value=True),
+        )
+        appkit = SimpleNamespace(
+            NSPasteboard=SimpleNamespace(generalPasteboard=MagicMock(return_value=pasteboard)),
+            NSPasteboardTypeString="public.utf8-plain-text",
+        )
+
+        with patch.dict(sys.modules, {"AppKit": appkit}):
+            self.assertEqual(api.copy_text("hello"), {"ok": True})
+
+        pasteboard.clearContents.assert_called_once_with()
+        pasteboard.setString_forType_.assert_called_once_with("hello", "public.utf8-plain-text")
+
+    def test_port_api_copy_text_coerces_values_to_strings(self) -> None:
+        api = mac_app.PortApi()
+        pasteboard = SimpleNamespace(
+            clearContents=MagicMock(),
+            setString_forType_=MagicMock(return_value=True),
+        )
+        appkit = SimpleNamespace(
+            NSPasteboard=SimpleNamespace(generalPasteboard=MagicMock(return_value=pasteboard)),
+            NSPasteboardTypeString="public.utf8-plain-text",
+        )
+
+        with patch.dict(sys.modules, {"AppKit": appkit}):
+            self.assertEqual(api.copy_text({"text": "hello"}), {"ok": True})
+
+        pasteboard.setString_forType_.assert_called_once_with(
+            "{'text': 'hello'}",
+            "public.utf8-plain-text",
+        )
+
+    def test_port_api_copy_text_falls_back_to_pbcopy(self) -> None:
+        api = mac_app.PortApi()
+        pasteboard = SimpleNamespace(
+            clearContents=MagicMock(),
+            setString_forType_=MagicMock(return_value=False),
+        )
+        appkit = SimpleNamespace(
+            NSPasteboard=SimpleNamespace(generalPasteboard=MagicMock(return_value=pasteboard)),
+            NSPasteboardTypeString="public.utf8-plain-text",
+        )
+
+        with (
+            patch.dict(sys.modules, {"AppKit": appkit}),
+            patch("subprocess.run") as run,
+        ):
+            self.assertEqual(api.copy_text("hello"), {"ok": True})
+
+        run.assert_called_once_with(
+            ["/usr/bin/pbcopy"],
+            input="hello",
+            text=True,
+            check=True,
+            timeout=2,
+        )
 
 
 if __name__ == "__main__":

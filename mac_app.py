@@ -95,11 +95,13 @@ def _resize_main_window_centered(window: Any) -> None:
 
 
 def _port_is_available(host: str, port: int) -> bool:
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.bind((host, port))
-    except OSError:
-        return False
+    targets = [WEB_HOST] if host in ("0.0.0.0", "::") else [host]
+    for target in targets:
+        try:
+            with socket.create_connection((target, port), timeout=0.2):
+                return False
+        except OSError:
+            continue
     return True
 
 
@@ -236,6 +238,19 @@ def _stop_server(runtime: ServerRuntime | None) -> None:
         runtime.thread.join(timeout=5)
 
 
+def _request_server_stop(runtime: ServerRuntime | None) -> None:
+    if runtime is None or runtime.master is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(
+            _shutdown_master(runtime.master),
+            runtime.master.event_loop,
+        )
+    except Exception:
+        logging.exception("Failed to request proxy listener shutdown")
+        runtime.master.shutdown()
+
+
 PORT_FORM_HTML = """\
 <!doctype html>
 <html lang="zh-CN">
@@ -306,6 +321,43 @@ class PortApi:
             runtime, self.runtime = self.runtime, None
         _stop_server(runtime)
 
+    def copy_text(self, value: object) -> dict[str, object]:
+        try:
+            _copy_text_to_macos("" if value is None else str(value))
+            return {"ok": True}
+        except Exception as exc:
+            logging.exception("Failed to copy text")
+            return {"ok": False, "error": str(exc)}
+
+    def close(self) -> None:
+        self.closed.set()
+        with self.lock:
+            runtime, self.runtime = self.runtime, None
+        _request_server_stop(runtime)
+        os._exit(0)
+
+
+def _copy_text_to_macos(value: str) -> None:
+    try:
+        from AppKit import NSPasteboard
+        from AppKit import NSPasteboardTypeString
+
+        pasteboard = NSPasteboard.generalPasteboard()
+        pasteboard.clearContents()
+        if pasteboard.setString_forType_(value, NSPasteboardTypeString):
+            return
+        raise RuntimeError("macOS pasteboard rejected the text")
+    except Exception:
+        logging.debug("AppKit pasteboard copy failed; falling back to pbcopy", exc_info=True)
+
+    subprocess.run(
+        ["/usr/bin/pbcopy"],
+        input=value,
+        text=True,
+        check=True,
+        timeout=2,
+    )
+
 
 def _run_app() -> None:
     import webview
@@ -320,7 +372,7 @@ def _run_app() -> None:
             width=620,
             height=330,
         )
-        api.window.events.closing += api.stop
+        api.window.events.closing += api.close
         webview.start()
     except Exception as exc:
         webview.create_window(

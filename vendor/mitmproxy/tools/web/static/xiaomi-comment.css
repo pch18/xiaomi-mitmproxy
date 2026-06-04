@@ -2,6 +2,15 @@ section.xiaomi-decoded {
     height: 100%;
     overflow: auto;
     padding: 1em;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+section.xiaomi-decoded *,
+.contentview,
+.contentview * {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 section.xiaomi-decoded pre {
@@ -55,6 +64,36 @@ section.xiaomi-decoded pre {
     color: #0550ae;
 }
 
+.xiaomi-token-label {
+    cursor: pointer;
+    display: inline-block;
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+
+.xiaomi-toast {
+    background: rgba(0, 0, 0, .78);
+    border-radius: 4px;
+    bottom: 34px;
+    color: #fff;
+    font-size: 13px;
+    opacity: 0;
+    padding: 8px 12px;
+    pointer-events: none;
+    position: fixed;
+    right: 12px;
+    transform: translateY(6px);
+    transition: opacity .15s ease, transform .15s ease;
+    z-index: 10000;
+}
+
+.xiaomi-toast-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .xiaomi-json-node[open] > summary .xiaomi-json-folded {
     display: none;
 }
@@ -78,4 +117,3 @@ section.xiaomi-decoded pre {
     border-color: #ac2925;
     color: #fff;
 }
-

@@ -11,6 +11,7 @@ from miutils import encrypt_rc4, get_signed_nonce
 
 NONCE = "ttoNj0dlFDkBxMZ3"
 TEST_SSECURITY = "dGVzdC1zc2VjdXJpdHk="
+TEST_PASS_TOKEN = "dGVzdC1wYXNzLXRva2Vu"
 SIGNED_NONCE = get_signed_nonce(TEST_SSECURITY, NONCE)
 
 
@@ -18,13 +19,19 @@ class XiaomiDecodedTabTest(unittest.TestCase):
     def setUp(self) -> None:
         self.original_ssecurity = app.SSECURITY
         self.original_ssecurity_path = app.SSECURITY_PATH
+        self.original_pass_token = app.PASS_TOKEN
+        self.original_pass_token_path = app.PASS_TOKEN_PATH
         self.temp_dir = TemporaryDirectory()
         app.SSECURITY = TEST_SSECURITY
+        app.PASS_TOKEN = TEST_PASS_TOKEN
         app.SSECURITY_PATH = Path(self.temp_dir.name) / "ssecurity.txt"
+        app.PASS_TOKEN_PATH = Path(self.temp_dir.name) / "passToken.txt"
 
     def tearDown(self) -> None:
         app.SSECURITY = self.original_ssecurity
         app.SSECURITY_PATH = self.original_ssecurity_path
+        app.PASS_TOKEN = self.original_pass_token
+        app.PASS_TOKEN_PATH = self.original_pass_token_path
         self.temp_dir.cleanup()
 
     def test_stores_plaintext_without_modifying_original_bodies(self) -> None:
@@ -44,6 +51,8 @@ class XiaomiDecodedTabTest(unittest.TestCase):
             {
                 "request": {"ok": True, "data": {"request": True}},
                 "response": {"ok": True, "data": {"response": True}},
+                "ssecurity": TEST_SSECURITY,
+                "passToken": TEST_PASS_TOKEN,
             },
         )
         self.assertEqual(flow.request.content, original_request)
@@ -58,6 +67,8 @@ class XiaomiDecodedTabTest(unittest.TestCase):
             {
                 "request": {"ok": True, "data": "hello"},
                 "response": {"ok": False, "error": "Waiting for response.", "raw": ""},
+                "ssecurity": TEST_SSECURITY,
+                "passToken": TEST_PASS_TOKEN,
             },
         )
 
@@ -69,6 +80,8 @@ class XiaomiDecodedTabTest(unittest.TestCase):
             {
                 "request": {"ok": True, "data": "hello"},
                 "response": {"ok": False, "error": "Waiting for response.", "raw": ""},
+                "ssecurity": TEST_SSECURITY,
+                "passToken": TEST_PASS_TOKEN,
             },
         )
 
@@ -108,10 +121,16 @@ class XiaomiDecodedTabTest(unittest.TestCase):
         self.assertFalse(decoded["request"]["ok"])
         self.assertIn("ssecurity.txt", decoded["request"]["error"])
         self.assertEqual(decoded["response"]["error"], "Waiting for response.")
+        self.assertEqual(decoded["ssecurity"], "")
+        self.assertEqual(decoded["passToken"], TEST_PASS_TOKEN)
 
     def test_loads_ssecurity_from_file(self) -> None:
         app.SSECURITY_PATH.write_text(f"{TEST_SSECURITY}\n")
         self.assertEqual(app._load_ssecurity(), TEST_SSECURITY)
+
+    def test_loads_pass_token_from_file(self) -> None:
+        app.PASS_TOKEN_PATH.write_text(f"{TEST_PASS_TOKEN}\n")
+        self.assertEqual(app._load_pass_token(), TEST_PASS_TOKEN)
 
     def test_creates_empty_ssecurity_file_when_missing(self) -> None:
         self.assertEqual(app._load_ssecurity(), "")
@@ -122,19 +141,71 @@ class XiaomiDecodedTabTest(unittest.TestCase):
         data_dir = Path(self.temp_dir.name) / "desktop-data"
         with patch.dict("os.environ", {app.DATA_DIR_ENV: str(data_dir)}):
             self.assertEqual(app._ssecurity_path(), data_dir / "ssecurity.txt")
+            self.assertEqual(app._pass_token_path(), data_dir / "passToken.txt")
         self.assertTrue(data_dir.is_dir())
 
-    def test_captures_ssecurity_from_login_response(self) -> None:
+    def test_captures_ssecurity_and_pass_token_from_login_response(self) -> None:
         flow = _plain_flow(
             host="account.xiaomi.com",
-            path="/pass/serviceLoginAuth2",
-            response='&&&START&&&{"code":0,"ssecurity":"bmV3LXNlY3VyaXR5"}',
+            path="/pass/serviceLoginAuth2?sid=mijia",
+            response='&&&START&&&{"code":0,"ssecurity":"bmV3LXNlY3VyaXR5","passToken":"bmV3LXBhc3MtdG9rZW4="}',
+        )
+
+        with patch("mitmproxy.tools.web.app.ClientConnection.broadcast") as broadcast:
+            app.response(flow)
+
+        self.assertEqual(app.SSECURITY, "bmV3LXNlY3VyaXR5")
+        self.assertEqual(app.PASS_TOKEN, "bmV3LXBhc3MtdG9rZW4=")
+        self.assertEqual(app.SSECURITY_PATH.read_text(), "bmV3LXNlY3VyaXR5\n")
+        self.assertEqual(app.PASS_TOKEN_PATH.read_text(), "bmV3LXBhc3MtdG9rZW4=\n")
+        broadcast.assert_called_once_with(
+            type="state/update",
+            payload={
+                "xiaomiCredentials": {
+                    "passToken": "bmV3LXBhc3MtdG9rZW4=",
+                    "ssecurity": "bmV3LXNlY3VyaXR5",
+                }
+            },
+        )
+
+    def test_captures_ssecurity_from_service_login_get(self) -> None:
+        flow = _plain_flow(
+            host="account.xiaomi.com",
+            method="GET",
+            path="/pass/serviceLogin?sid=mijia&_json=true",
+            response='&&&START&&&{"code":0,"ssecurity":"Z2V0LXNlY3VyaXR5"}',
         )
 
         app.response(flow)
 
-        self.assertEqual(app.SSECURITY, "bmV3LXNlY3VyaXR5")
-        self.assertEqual(app.SSECURITY_PATH.read_text(), "bmV3LXNlY3VyaXR5\n")
+        self.assertEqual(app.SSECURITY, "Z2V0LXNlY3VyaXR5")
+
+    def test_captures_ssecurity_from_auth2_post_form_sid(self) -> None:
+        flow = _plain_flow(
+            host="account.xiaomi.com",
+            method="POST",
+            path="/pass/serviceLoginAuth2",
+            content=urlencode({"_json": "true", "sid": "xiaomiio", "user": "17751619919"}),
+            response='&&&START&&&{"code":0,"ssecurity":"cG9zdC1zZWN1cml0eQ=="}',
+        )
+
+        app.response(flow)
+
+        self.assertEqual(app.SSECURITY, "cG9zdC1zZWN1cml0eQ==")
+
+    def test_ignores_login_ssecurity_when_sid_is_not_supported(self) -> None:
+        flow = _plain_flow(
+            host="account.xiaomi.com",
+            path="/pass/serviceLogin?sid=passport&_json=true",
+            response='&&&START&&&{"code":0,"ssecurity":"aWdub3JlZA=="}',
+        )
+
+        app.response(flow)
+
+        self.assertEqual(app.SSECURITY, TEST_SSECURITY)
+        self.assertEqual(app.PASS_TOKEN, TEST_PASS_TOKEN)
+        self.assertFalse(app.SSECURITY_PATH.exists())
+        self.assertFalse(app.PASS_TOKEN_PATH.exists())
 
     def test_captures_nested_ssecurity_from_login_response(self) -> None:
         flow = _plain_flow(
@@ -174,11 +245,26 @@ def _flow(
     return flow
 
 
-def _plain_flow(*, host: str, path: str, response: str) -> http.HTTPFlow:
+def _plain_flow(
+    *,
+    host: str,
+    path: str,
+    response: str,
+    method: str = "POST",
+    content: str | None = None,
+) -> http.HTTPFlow:
     client = connection.Client(peername=("127.0.0.1", 12345), sockname=("127.0.0.1", 8080))
     server = connection.Server(address=(host, 443))
     flow = http.HTTPFlow(client, server)
-    flow.request = http.Request.make("POST", f"https://{host}{path}")
+    headers = {}
+    if content is not None:
+        headers["content-type"] = "application/x-www-form-urlencoded"
+    flow.request = http.Request.make(
+        method,
+        f"https://{host}{path}",
+        content=content or b"",
+        headers=headers,
+    )
     flow.response = http.Response.make(200, response)
     return flow
 

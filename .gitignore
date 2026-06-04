@@ -1,7 +1,10 @@
 .venv/
+.venv-universal2/
+.python-universal2/
 __pycache__/
 *.py[cod]
 .DS_Store
 ssecurity.txt
+passToken.txt
 build/
 dist/

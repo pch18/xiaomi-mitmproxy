@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import mimetypes
+import os
 import os.path
 import re
 import secrets
@@ -13,6 +14,7 @@ import sys
 from collections.abc import Callable
 from collections.abc import Sequence
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 from typing import Awaitable
 from typing import ClassVar
@@ -61,6 +63,23 @@ TRANSPARENT_PNG = (
 )
 
 logger = logging.getLogger(__name__)
+
+XIAOMI_DATA_DIR_ENV = "XIAOMI_MITMPROXY_DATA_DIR"
+
+
+def xiaomi_credentials_to_json() -> dict[str, str]:
+    directory = Path(os.environ.get(XIAOMI_DATA_DIR_ENV, os.getcwd()))
+
+    def read_secret(filename: str) -> str:
+        try:
+            return (directory / filename).read_text().strip()
+        except OSError:
+            return ""
+
+    return {
+        "passToken": read_secret("passToken.txt"),
+        "ssecurity": read_secret("ssecurity.txt"),
+    }
 
 
 def cert_to_json(certs: Sequence[certs.Cert]) -> dict | None:
@@ -836,6 +855,7 @@ class State(RequestHandler):
             "servers": {
                 s.mode.full_spec: s.to_json() for s in master.proxyserver.servers
             },
+            "xiaomiCredentials": xiaomi_credentials_to_json(),
             "platform": sys.platform,
             "localModeUnavailable": mitmproxy_rs.local.LocalRedirector.unavailable_reason(),
         }
